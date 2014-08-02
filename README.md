@@ -20,7 +20,7 @@ Installation
 
         $ python setup.py install
 
-[Requires **requests** library](https://github.com/kennethreitz/requests/)
+Requires [**requests** library](https://github.com/kennethreitz/requests/) and **Python v3.+**
 
 Usage
 -----
