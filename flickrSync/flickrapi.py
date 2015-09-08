@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import logging
 import webbrowser
 
 from time import sleep
@@ -9,7 +10,8 @@ from urllib.request import urlopen, unquote
 
 from .helper import path_to_array
 from .flickrhandler import FlickrHandler
-from . import __app__, __dev__, __callback__, __exclude__
+from . import __app__, __callback__, __exclude__, __logFile__, __logLevel__
+
 
 data_file = "flickr.session.dat"
 
@@ -19,35 +21,23 @@ upload = base + "/upload"
 auth_rt = base + "/oauth/request_token"
 auth_at = base + "/oauth/access_token"
 
-msg = {
-	"auth": "\tOAuth needed",
-	"deletion": "\tDeleting...",
-	"download": "\tDownloading...",
-	"error_": "\tError while ",
-	"exc_": "\tEXCEPTION: ",
-	"fail": "\tFunction failed",
-	"failed": " failed",
-	"success": "\tSuccess",
-	"upload": "\tUploading..."
-}
+logging.basicConfig(format = "%(levelname)s / %(funcName)s: \t%(message)s @ line %(lineno)d", \
+	filename = __logFile__, filemode="w", level = __logLevel__)
+log = logging.getLogger("FlickrAPI")
 
-def dev(m):
-	if __dev__:
-		print(m)
 
 class FlickrAPI():
 	def __init__(self, directory):
-		print(__app__ + "\n" + len(__app__) * "-")
+		log.info(__app__ + "\n" + len(__app__) * "-")
 		self.DIR = directory
 		self.API = FlickrHandler(self.DIR)
-	
+
 	"""
 		OAuth
 	"""
 
 	def CheckTokens(self):
-		print(stack()[0][3])
-
+		log.debug("Running...")
 		try:
 			file = open(os.path.join(self.DIR, data_file), mode="r", encoding=sys.getfilesystemencoding()) #????
 			lines = tuple(file)
@@ -60,19 +50,17 @@ class FlickrAPI():
 				self.API.TOKEN = ""
 				self.API.TOKEN_SECRET = ""
 		except Exception as e:
-			print(msg["error_"] + "accessing session file")
-			dev(msg["exc_"] + e)
+			log.exception(e)
 		finally:
 			if not self.API.TOKEN:
-				print(msg["auth"])
+				log.info("OAuth needed before using the synchronization.")
 				return False
 			else:
-				print(msg["success"])
+				log.debug("OAuth tokens look good, you can proceed.")
 				return True
 
 	def OAuthSingIn(self):
-		print(stack()[0][3])
-
+		log.debug("Running...")
 		try:
 			os.remove(os.path.join(self.DIR, data_file))
 		except:
@@ -89,10 +77,10 @@ class FlickrAPI():
 			url = base + "/oauth/authorize?oauth_token=" + self.API.TOKEN
 			webbrowser.open(url)
 
-			print("\tAuthorize in browser using this URL\n\t" + url)
-			print("\tEnter your oauth_verifier from callback URL")
+			print("Authorize the app in browser using this URL\n\t" + url)
+			print("Enter your oauth_verifier from callback URL")
 
-			verifier = input("\t\t")
+			verifier = input("~~~")
 			if verifier != "":
 
 				resp_verifier = self.API.send_get(auth_at, {
@@ -112,20 +100,18 @@ class FlickrAPI():
 						+ "\nusername=" + resp_verifier["username"])
 					session.close()
 
-					print("\tSigned in as " + unquote(resp_verifier["fullname"]))
+					log.info("Signed in as %s", unquote(resp_verifier["fullname"]))
 					return True
 
-		print(msg["fail"])
+		log.critical("Something unexpected happened, try the authorization again.")
 		return False
-	
+
 	"""
 		Individual photo functions
 	"""
 
 	def AddPhotoToAlbum(self, photo_id, album_id):
-		_fn_ = stack()[0][3] + " % " + str(photo_id) + ", " + str(album_id)
-		dev(_fn_)
-
+		log.debug("Adding photo %s to album %s.", str(photo_id), str(album_id))
 		parameters = {
 			"oauth_token": self.API.TOKEN,
 			"method": "flickr.photosets.addPhoto",
@@ -138,16 +124,14 @@ class FlickrAPI():
 		resp = self.API.send_post(rest, parameters)
 
 		if resp["stat"] == "ok":
-			dev(msg["success"])
+			log.debug("Photo %s added to album %s.", str(photo_id), str(album_id))
 			return True
 
-		print("\t" + _fn_ + msg["failed"])
+		log.error("Photo %s couldn't be added to album %s.", str(photo_id), str(album_id))
 		return False
 
 	def DeletePhoto(self, photo_id):
-		_fn_ = stack()[0][3] + " % " + str(photo_id)
-		dev(_fn_)
-
+		log.debug("Deleting photo %s.", str(photo_id))
 		parameters = {
 			"oauth_token": self.API.TOKEN,
 			"method": "flickr.photos.delete",
@@ -159,15 +143,14 @@ class FlickrAPI():
 		resp = self.API.send_post(rest, parameters)
 
 		if resp["stat"] == "ok":
-			dev(msg["success"])
+			log.debug("Photo %s deleted.", str(photo_id))
 			return True
 
-		print("\t" + _fn_ + msg["failed"])
+		log.error("Photo %s couldn't be deleted.", str(photo_id))
 		return False
 
 	def DownloadPhoto(self, photo, directory):
-		_fn_ = stack()[0][3] + " % " + photo["title"] + ", " + directory
-		dev(_fn_)
+		log.debug("Downloading photo %s to %s.", photo["title"], directory)
 
 		title = photo["title"]
 		if re.match("(?:.*)(jpg)$", photo["title"], re.IGNORECASE) == None:
@@ -179,16 +162,15 @@ class FlickrAPI():
 			output = open(os.path.join(directory, title), "wb")
 			output.write(file.read())
 			output.close()
-			dev(msg["success"])
+			log.debug("Photo %s downloaded.", photo["title"])
 			return True
 		except:
 			pass
-		print("\t" + _fn_ + msg["failed"])
+		log.error("Photo %s couldn't be downloaded to %s.", photo["title"], directory)
 		return False
-		
+
 	def UploadPhoto(self, file, data):
-		_fn_ = stack()[0][3] + " % " + file + ", " + ", ".join(data.values())
-		dev(_fn_)
+		log.debug("Uploading photo %s.", file)
 
 		parameters = {
 			"oauth_token": self.API.TOKEN,
@@ -207,19 +189,18 @@ class FlickrAPI():
 		resp = self.API.send_file(upload, parameters, file)
 
 		if resp["stat"] == "ok":
-			dev(msg["success"])
+			log.debug("Photo %s uploaded.", data["title"])
 			return resp["photoid"]["text"]
 
-		print("\t" + _fn_ + msg["failed"])
+		log.error("Photo %s couldn't be uploaded.", file)
 		return False
-	
+
 	"""
 		Album functions
 	"""
 
 	def CreateAlbum(self, name, primary_photo_id, description):
-		_fn_ = stack()[0][3] + " % " + name
-		dev(_fn_)
+		log.debug("Creating album %s.", name)
 
 		parameters = {
 			"oauth_token": self.API.TOKEN,
@@ -234,60 +215,40 @@ class FlickrAPI():
 		resp = self.API.send_post(rest, parameters)
 
 		if resp["stat"] == "ok":
-			dev(msg["success"])
+			log.debug("Album %s created.", name)
 			return resp["photoset"]["id"]
 
-		print("\t" + _fn_ + msg["failed"])
-		return False
-
-	def GetAlbumIdByName(self, name):
-		_fn_ = stack()[0][3] + " % " + name
-		dev(_fn_)
-
-		parameters = {
-			"oauth_token": self.API.TOKEN,
-			"method": "flickr.photosets.getList",
-			"format": "json",
-			"nojsoncallback": 1
-		}
-
-		resp = self.API.send_post(rest, parameters)
-
-		if resp["stat"] == "ok":
-			for album in resp["photosets"]["photoset"]:
-				if album["title"]["_content"] == name:
-					dev(msg["success"])
-					return album["id"]
-			dev(msg["success"])
-			return None
-		print("\t" + _fn_ + msg["failed"])
+		log.error("Album %s couldn't be created.", name)
 		return False
 
 	def GetAlbums(self):
-		dev(stack()[0][3])
-
+		log.debug("Running...")
 		parameters = {
 			"oauth_token": self.API.TOKEN,
 			"method": "flickr.photosets.getList",
 			"format": "json",
-			"nojsoncallback": 1
+			"nojsoncallback": 1,
+			"page": 1
 		}
 
-		resp = self.API.send_post(rest, parameters)
+		(albums, no_of_pages) = ({}, 1)
+		while parameters["page"] <= no_of_pages:
+			resp = self.API.send_post(rest, parameters)
 
-		if resp["stat"] == "ok":
-			albums = []
-			for album in resp["photosets"]["photoset"]:
-				albums.append({"id": album["id"], "name": album["title"]["_content"]})
-			dev(msg["success"])
-			return albums
+			if resp["stat"] == "ok":
+				no_of_pages = resp["photosets"]["pages"]
+				for album in resp["photosets"]["photoset"]:
+					albums[album["title"]["_content"]] = album["id"]
+			else:
+				log.error("Albums couldn't be retrieved.")
+				return False
+			parameters["page"] += 1
 
-		print("\t" + stack()[0][3] + msg["failed"])
-		return False
+		log.debug("All albums retrieved.")
+		return albums
 
 	def GetPhotosInAlbum(self, album_id, album_name):
-		_fn_ = stack()[0][3] + " % " + str(album_id) + ", " + album_name
-		dev(_fn_)
+		log.debug("Getting photos in %s.", album_name)
 
 		parameters = {
 			"oauth_token": self.API.TOKEN,
@@ -300,7 +261,6 @@ class FlickrAPI():
 		}
 
 		(photos, photos_short, no_of_pages) = ([], [], 1)
-
 		while parameters["page"] <= no_of_pages:
 			resp = self.API.send_post(rest, parameters)
 
@@ -311,11 +271,11 @@ class FlickrAPI():
 					photos_short.append([photo["album"], photo["title"]])
 					photos.append(photo)
 			else:
-				print("\t" + _fn_ + msg["failed"])
+				log.error("Photos in %s couldn't be retrieved.", album_name)
 				return False
 			parameters["page"] += 1
 
-		dev(msg["success"])
+		log.debug("Photos in %s retrieved.", album_name)
 		return (photos, photos_short)
 
 	"""
@@ -323,8 +283,7 @@ class FlickrAPI():
 	"""
 
 	def GetPhotosInDirectory(self, directory):
-		dev(stack()[0][3] + " % " + directory)
-
+		log.debug("Running...")
 		photos = []
 		subdir = len(path_to_array(directory))
 
@@ -356,22 +315,21 @@ class FlickrAPI():
 								album_name = path[1]
 							else:
 								album_name = os.path.split(path[0])[1]
-						
+
 						photos.append({"title": file, "path": os.path.join(root, file), "album": album_name})
-		dev(msg["success"])
+		log.debug("All photos found.")
 		return photos
 
-	def GetPhotosToSync(self, directory):
-		dev(stack()[0][3] + " % " + directory)
+	def GetPhotosToSync(self, albums, directory):
+		log.debug("Running...")
 
 		directory = os.path.realpath(directory)
 		local = self.GetPhotosInDirectory(directory)
 		(local_short, cloud, cloud_short, upload, delete) = ([], [], [], [], [])
 
-		albums = self.GetAlbums()
 		if albums:
-			for album in albums:
-				photos = self.GetPhotosInAlbum(album["id"], album["name"])
+			for album_name, album_id in albums.items():
+				photos = self.GetPhotosInAlbum(album_id, album_name)
 				if photos:
 					cloud += photos[0]
 					cloud_short += photos[1]
@@ -386,24 +344,23 @@ class FlickrAPI():
 				upload.append(photo)
 			else:
 				local_short.append(short)
-		print("\t" + str(len(upload)) + " photos to upload found")
+		log.info("%s photos found to upload.", str(len(upload)))
 
 		for photo in cloud:
 			if not [photo["album"], photo["title"]] in local_short:
 				delete.append(photo)
-		print("\t" + str(len(delete)) + " photos to download / delete found")
+		log.info("%s photos found to download / delete.", str(len(upload)))
 
 		return (upload, delete)
 
 	def SyncPhotos(self, directory, save, delete, upload, max, wait):
-		print(stack()[0][3] + " % " + directory)
-		(to_upload, to_delete) = self.GetPhotosToSync(directory)
+		log.info("Photo synchronization started.")
+		albums = self.GetAlbums()
+		(to_upload, to_delete) = self.GetPhotosToSync(albums, directory)
 		(saved, notsaved, deleted, notdeleted, uploaded, notuploaded) = (0, 0, 0, 0, 0, 0)
-		albums = {}
 
 		if save:
-			if not __dev__:
-				print(msg["download"])
+			log.info("Downloading photos from Flickr...")
 			for photo in to_delete:
 				dir = os.path.join(directory, photo["album"])
 				if not os.path.exists(dir):
@@ -417,40 +374,32 @@ class FlickrAPI():
 					notsaved += 1
 
 				if max and max <= saved:
-					print("\tReached maximal number of downloads (" + str(max) + ")")
+					log.warning("Reached maximal number of downloads (%s)", str(max))
 					break
 				if wait:
 					sleep(wait)
-			print("\tDownload " + str(saved) + " times successful, " + str(notsaved) + " times failed")
-		if delete and notsaved == 0 and (not max or saved < max):
-			if not __dev__:
-				print(msg["deletion"])
+			log.info("%s photos downloaded, %s photos couldn't be downloaded", str(saved), str(notsaved))
+		if delete and not save and (not max or saved < max):
+			log.info("Deleting photos on Flickr...")
 			for photo in to_delete:
 				if self.DeletePhoto(photo["id"]):
 					deleted += 1
 				else:
 					notdeleted += 1
-			print("\tDeletion " + str(deleted) + " times successful, " + str(notdeleted) + " times failed")
-		elif delete and not notsaved == 0:
-			print("\tDeletion not initiated, not all photos successfully saved")
+			log.info("%s photos deleted, %s photos couldn't be deleted", str(deleted), str(notdeleted))
 		if upload and (not max or saved < max):
-			if not __dev__:
-				print(msg["upload"])
+			log.info("Uploading photos to Flickr...")
 			for photo in to_upload:
 				photo_id = self.UploadPhoto(photo["path"], {"title": photo["title"]})
 				done = False
 				if photo_id:
 					if photo["album"] in albums:
-						album_id = albums[photo["album"]]
-					else:
-						album_id = self.GetAlbumIdByName(photo["album"])
-					if album_id:
-						if not photo["album"] in albums:
-							albums.update({photo["album"]: album_id})
-						if self.AddPhotoToAlbum(photo_id, album_id):
+						if self.AddPhotoToAlbum(photo_id, albums[photo["album"]]):
 							done = True
-					elif album_id == None:
-						if self.CreateAlbum(photo["album"], photo_id, False):
+					else:
+						new_aldum_id = self.CreateAlbum(photo["album"], photo_id, False)
+						albums[photo["album"]] = new_aldum_id
+						if new_aldum_id:
 							done = True
 					if done:
 						uploaded += 1
@@ -459,14 +408,14 @@ class FlickrAPI():
 						notuploaded += 1
 				else:
 					notuploaded += 1
-				
+
 				if max and max <= saved + uploaded:
-					print("\tReached maximal number of downloads / uploads (" + str(max) + ")")
+					log.warning("Reached maximal number of downloads (%s)", str(max))
 					break
 				if wait:
 					sleep(wait)
 
-			print("\tUpload " + str(uploaded) + " times successful, " + str(notuploaded) + " times failed")
+			log.info("%s photos uploaded, %s photos couldn't be uploaded", str(uploaded), str(notuploaded))
 
 		return {
 			"download": {

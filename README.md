@@ -11,7 +11,7 @@ Python Flickr photo synchronization using OAuth
 Installation
 ------------
 1. In **flickSync/\_\_init\_\_.py** set:
-    - **\_\_dev\_\_** to True / False depending on if you want to see extensive info in console
+    - **\_\_logLevel\_\_** to 10, 20, 40 or 50 in order to see DEBUG, INFO, WARNING, ERROR or CRITICAL messages in log file
     - **\_\_exclude\_\_** to list of folders which should be ignored (thumbs etc.)
     - **\_\_callback\_\_** to URL which is called when OAuth verifier requested
     - You can also set key and secret if you want to use your own app [(get a key)](https://www.flickr.com/services/apps/create/apply/)

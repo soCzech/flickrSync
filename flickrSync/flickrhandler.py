@@ -5,7 +5,7 @@ from os.path import join
 from binascii import b2a_base64
 from time import localtime, strftime
 
-from . import __dev__, __ver__, __key__, __secret__
+from . import __logLevel__, __ver__, __key__, __secret__
 from .helper import escape, generate_rand_num, generate_timestamp, \
 	parameters_to_string, to_bytes, to_utf8, createJSON, orderJSON
 
@@ -111,7 +111,7 @@ class FlickrHandler():
 				self.PRINT += tabs * "\t" + str(k) + ": " + str(v) + "\n"
 
 	def _log(self, d):
-		if __dev__:
+		if __logLevel__ == 10:
 			self._debug(d, 0)
 			f = open(join(self.DIR, "flickr.communication.dat"), "a+")
 			f.write(self.PRINT + "\n")

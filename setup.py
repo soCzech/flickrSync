@@ -10,7 +10,7 @@ setup(
 	name="flickrSync",
 	version=__ver__,
 	description="Python Flickr photo synchronization using OAuth",
-	long_description=open("README.txt").read(),
+	long_description=open("README.md").read(),
 	author="Tomáš Souček",
 	author_email="soucek.gns@gmail.com",
 	url="https://github.com/soCzech",
