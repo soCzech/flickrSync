@@ -5,7 +5,7 @@ from os.path import join
 from binascii import b2a_base64
 from time import localtime, strftime
 
-from . import __logLevel__, __ver__, __key__, __secret__
+from . import __logLevel__, __commFile__, __ver__, __key__, __secret__
 from .helper import escape, generate_rand_num, generate_timestamp, \
 	parameters_to_string, to_bytes, to_utf8, createJSON, orderJSON
 
@@ -18,6 +18,9 @@ class FlickrHandler():
 
 	def __init__(self, directory):
 		self.DIR = directory
+		if __logLevel__ == 10:
+			f = open(join(self.DIR, __commFile__), "w")
+			f.close()
 		self._restore()
 
 	def build_signature(self, url, string_of_parameters, post):
@@ -113,7 +116,7 @@ class FlickrHandler():
 	def _log(self, d):
 		if __logLevel__ == 10:
 			self._debug(d, 0)
-			f = open(join(self.DIR, "flickr.communication.dat"), "a+")
+			f = open(join(self.DIR, __commFile__), "a+")
 			f.write(self.PRINT + "\n")
 			f.close()
 			self._restore()

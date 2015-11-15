@@ -1,16 +1,17 @@
 import os
 import re
 import sys
+import time
 import logging
 import webbrowser
 
-from time import sleep
 from inspect import stack
 from urllib.request import urlopen, unquote
 
 from .helper import path_to_array
 from .flickrhandler import FlickrHandler
-from . import __app__, __callback__, __exclude__, __logFile__, __logLevel__
+from . import __app__, __callback__, __exclude__, __logFile__, \
+	__logLevel__, __consoleLevel__
 
 
 data_file = "flickr.session.dat"
@@ -21,14 +22,24 @@ upload = base + "/upload"
 auth_rt = base + "/oauth/request_token"
 auth_at = base + "/oauth/access_token"
 
-logging.basicConfig(format = "%(levelname)s / %(funcName)s: \t%(message)s @ line %(lineno)d", \
+logging.basicConfig(format = "%(funcName)-20s : %(levelname)-8s %(message)s", \
 	filename = __logFile__, filemode="w", level = __logLevel__)
-log = logging.getLogger("FlickrAPI")
+
+console = logging.StreamHandler()
+console.setLevel(__consoleLevel__)
+console.setFormatter(logging.Formatter("%(message)s"))
+
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("").addHandler(console)
+log = logging.getLogger(__name__)
+
 
 
 class FlickrAPI():
 	def __init__(self, directory):
-		log.info(__app__ + "\n" + len(__app__) * "-")
+		log.info(__app__ + " @ " + time.strftime("%Y/%m/%d %H:%M:%S", \
+			time.localtime(time.time())))
+		log.info((len(__app__) + 22) * "-")
 		self.DIR = directory
 		self.API = FlickrHandler(self.DIR)
 
@@ -37,9 +48,10 @@ class FlickrAPI():
 	"""
 
 	def CheckTokens(self):
-		log.debug("Running...")
+		log.debug("Checking OAuth tokens.")
 		try:
-			file = open(os.path.join(self.DIR, data_file), mode="r", encoding=sys.getfilesystemencoding()) #????
+			file = open(os.path.join(self.DIR, data_file), mode="r", \
+				encoding=sys.getfilesystemencoding()) #????
 			lines = tuple(file)
 			file.close()
 			for l in lines:
@@ -60,7 +72,7 @@ class FlickrAPI():
 				return True
 
 	def OAuthSingIn(self):
-		log.debug("Running...")
+		log.debug("Running authorization process.")
 		try:
 			os.remove(os.path.join(self.DIR, data_file))
 		except:
@@ -77,8 +89,8 @@ class FlickrAPI():
 			url = base + "/oauth/authorize?oauth_token=" + self.API.TOKEN
 			webbrowser.open(url)
 
-			print("Authorize the app in browser using this URL\n\t" + url)
-			print("Enter your oauth_verifier from callback URL")
+			log.warning("Authorize the app in browser using this URL\n\t" + url)
+			log.warning("Enter your oauth_verifier from callback URL")
 
 			verifier = input("~~~")
 			if verifier != "":
@@ -127,7 +139,8 @@ class FlickrAPI():
 			log.debug("Photo %s added to album %s.", str(photo_id), str(album_id))
 			return True
 
-		log.error("Photo %s couldn't be added to album %s.", str(photo_id), str(album_id))
+		log.error("Photo %s couldn't be added to album %s.", \
+			str(photo_id), str(album_id))
 		return False
 
 	def DeletePhoto(self, photo_id):
@@ -157,7 +170,8 @@ class FlickrAPI():
 			title += "." + photo["originalformat"]
 		try:
 			url = "https://farm%s.staticflickr.com/%s/%s_%s_o.%s" \
-				% (photo["farm"], photo["server"], photo["id"], photo["originalsecret"], photo["originalformat"])
+				% (photo["farm"], photo["server"], photo["id"], \
+				photo["originalsecret"], photo["originalformat"])
 			file = urlopen(url)
 			output = open(os.path.join(directory, title), "wb")
 			output.write(file.read())
@@ -222,7 +236,7 @@ class FlickrAPI():
 		return False
 
 	def GetAlbums(self):
-		log.debug("Running...")
+		log.debug("Retrieving your albums from Flickr.")
 		parameters = {
 			"oauth_token": self.API.TOKEN,
 			"method": "flickr.photosets.getList",
@@ -248,7 +262,7 @@ class FlickrAPI():
 		return albums
 
 	def GetPhotosInAlbum(self, album_id, album_name):
-		log.debug("Getting photos in %s.", album_name)
+		log.debug("Getting photos in Flickr album %s.", album_name)
 
 		parameters = {
 			"oauth_token": self.API.TOKEN,
@@ -283,45 +297,56 @@ class FlickrAPI():
 	"""
 
 	def GetPhotosInDirectory(self, directory):
-		log.debug("Running...")
+		log.debug("Searching your drive for photos.")
 		photos = []
 		subdir = len(path_to_array(directory))
 
+		last_dir = ""
 		for root, dirs, files in os.walk(directory):
+			file_path = path_to_array(root)[subdir:]
+			to_remove = []
+			save = True
+
+			for path in __exclude__:
+				if path in file_path:
+					save = False
+			if not save:
+				continue;
+
+			album_name = " - ".join(file_path)
+			if last_dir != album_name:
+				log.debug("%04d files found in %s", len(files), album_name)
+				last_dir = album_name
+
+			for path in file_path:
+				if path[:2] == "__":
+					save = False
+				elif path[:1] == "_":
+					to_remove.append(path)
+			for d in to_remove:
+				file_path.remove(d)
+			if not save:
+				continue;
+
+			if file_path:
+				album_name = " - ".join(file_path)
+			else:
+				path = os.path.split(directory)
+				if path[1]:
+					album_name = path[1]
+				else:
+					album_name = os.path.split(path[0])[1]
+
 			for file in files:
 				ext = file.lower().split(".")[-1]
 				if (ext == "jpg"):
-					safe = True
-					to_remove = []
-					file_path = path_to_array(root)[subdir:]
-
-					for path in __exclude__:
-						if path in file_path:
-							safe = False
-					for path in file_path:
-						if path[:2] == "__":
-							safe = False
-						elif path[:1] == "_":
-							to_remove.append(path)
-					for d in to_remove:
-						file_path.remove(d)
-
-					if safe:
-						if file_path:
-							album_name = " - ".join(file_path)
-						else:
-							path = os.path.split(directory)
-							if path[1]:
-								album_name = path[1]
-							else:
-								album_name = os.path.split(path[0])[1]
-
-						photos.append({"title": file, "path": os.path.join(root, file), "album": album_name})
+					photos.append({"title": file, \
+						"path": os.path.join(root, file), "album": album_name})
 		log.debug("All photos found.")
 		return photos
 
 	def GetPhotosToSync(self, albums, directory):
-		log.debug("Running...")
+		log.debug("Collecting photos for synchronization.")
 
 		directory = os.path.realpath(directory)
 		local = self.GetPhotosInDirectory(directory)
@@ -338,18 +363,36 @@ class FlickrAPI():
 		else:
 			return False
 
+		length_local = len(local)
+		current = 0;
+		last_album = ""
 		for photo in local:
+			current += 1
+			if photo["album"] != last_album:
+				log.debug("Finding photos saved only locally (%02d%% : %s)", \
+					round(current/length_local*100), photo["album"])
+				last_album = photo["album"]
+
 			short = [photo["album"], photo["title"]]
 			if not short in cloud_short:
 				upload.append(photo)
 			else:
 				local_short.append(short)
-		log.info("%s photos found to upload.", str(len(upload)))
+		log.info("%04d photos found to upload.", len(upload))
 
+		length_local = len(cloud)
+		current = 0;
+		last_album = ""
 		for photo in cloud:
+			current += 1
+			if photo["album"] != last_album:
+				log.debug("Finding photos saved in cloud only (%02d%% : %s)", \
+					round(current/length_local*100), photo["album"])
+				last_album = photo["album"]
+
 			if not [photo["album"], photo["title"]] in local_short:
 				delete.append(photo)
-		log.info("%s photos found to download / delete.", str(len(upload)))
+		log.info("%04d photos found to download / delete.", len(delete))
 
 		return (upload, delete)
 
@@ -374,11 +417,11 @@ class FlickrAPI():
 					notsaved += 1
 
 				if max and max <= saved:
-					log.warning("Reached maximal number of downloads (%s)", str(max))
+					log.warning("Reached maximal number of downloads (%d)", max)
 					break
 				if wait:
-					sleep(wait)
-			log.info("%s photos downloaded, %s photos couldn't be downloaded", str(saved), str(notsaved))
+					time.sleep(wait)
+			log.info("%d photos downloaded, %d photos couldn't be downloaded", saved, notsaved)
 		if delete and not save and (not max or saved < max):
 			log.info("Deleting photos on Flickr...")
 			for photo in to_delete:
@@ -386,7 +429,7 @@ class FlickrAPI():
 					deleted += 1
 				else:
 					notdeleted += 1
-			log.info("%s photos deleted, %s photos couldn't be deleted", str(deleted), str(notdeleted))
+			log.info("%d photos deleted, %d photos couldn't be deleted", deleted, notdeleted)
 		if upload and (not max or saved < max):
 			log.info("Uploading photos to Flickr...")
 			for photo in to_upload:
@@ -410,12 +453,12 @@ class FlickrAPI():
 					notuploaded += 1
 
 				if max and max <= saved + uploaded:
-					log.warning("Reached maximal number of downloads (%s)", str(max))
+					log.warning("Reached maximal number of uploads (%d)", max)
 					break
 				if wait:
-					sleep(wait)
+					time.sleep(wait)
 
-			log.info("%s photos uploaded, %s photos couldn't be uploaded", str(uploaded), str(notuploaded))
+			log.info("%d photos uploaded, %d photos couldn't be uploaded", uploaded, notuploaded)
 
 		return {
 			"download": {

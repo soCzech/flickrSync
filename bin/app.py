@@ -1,7 +1,12 @@
 import sys
+import time
 import os.path
 import argparse
-from flickrSync import FlickrAPI
+try:
+	from flickrSync import FlickrAPI
+	import_error = False
+except ImportError:
+	import_error = True
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
@@ -15,7 +20,7 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 
 	LOCAL_DIR = os.path.dirname(os.path.realpath(__file__))
-	
+
 	if not args.wait:
 		args.wait = 0;
 	else:
@@ -24,8 +29,8 @@ if __name__ == "__main__":
 		args.max = False;
 	else:
 		args.max = int(float(args.max))
-	
-	if args.folder or args.authorize:
+
+	if (args.folder or args.authorize) and not import_error:
 		INSTANCE = FlickrAPI(LOCAL_DIR)
 
 		authorized = INSTANCE.CheckTokens()
@@ -33,5 +38,8 @@ if __name__ == "__main__":
 			authorized = INSTANCE.OAuthSingIn()
 		if authorized and args.folder:
 			INSTANCE.SyncPhotos(args.folder, args.saving, args.deletion, args.upload, args.max, args.wait)
+	elif import_error:
+		print("app.py script error @ " + time.strftime("%Y/%m/%d %H:%M:%S", time.localtime(time.time())))
+		print("ERROR: flickrSync module cannot be imported.")
 	else:
 		parser.print_help()

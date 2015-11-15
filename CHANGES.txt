@@ -1,3 +1,4 @@
+v0.6.0, Nov 11th 2015 -- Logging and error handling improved.
 v0.5.1, Sep  8th 2015 -- Minor bugs fixed.
 v0.5.0, Aug 29th 2015 -- New logging, "download & delete" bug and 500 albums limit fixed.
 v0.4.0, Jul 22nd 2014 -- Initial release.
