@@ -1,3 +1,9 @@
+
+***Deprecated and no longer updated, use [photoSync](https://github.com/soCzech/photoSync) instead.***
+
+___
+
+
 flickrSync
 ==========
 Python Flickr photo synchronization using OAuth
